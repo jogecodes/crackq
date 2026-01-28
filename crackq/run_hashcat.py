@@ -405,6 +405,10 @@ def warning_callback(sender):
     """
     logger.warning('Callback Triggered: WARNING')
     msg_buf = sender.hashcat_status_get_log()
+    # Suppress hashcat advisory about --force; it's not user-actionable.
+    if 'do not report related errors' in msg_buf.lower():
+        logger.debug('Suppressed hashcat advisory warning: {}'.format(msg_buf))
+        return
     logger.warning('{}'.format(msg_buf))
     started = rq.registry.StartedJobRegistry(queue=redis_q)
     logger.warning('{}'.format(msg_buf))
@@ -426,6 +430,10 @@ def error_callback(sender):
     """
     logger.debug('Callback Triggered: ERROR')
     msg_buf = sender.hashcat_status_get_log()
+    # Suppress hashcat advisory about --force; it's not a user-actionable error.
+    if 'do not report related errors' in msg_buf.lower():
+        logger.debug('Suppressed hashcat advisory error: {}'.format(msg_buf))
+        return
     logger.debug('{}'.format(msg_buf))
     started = rq.registry.StartedJobRegistry(queue=redis_q)
     logger.error('{}'.format(msg_buf))
