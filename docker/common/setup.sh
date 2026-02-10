@@ -35,20 +35,12 @@ python3 -m pip install gunicorn
 #python3 -m pip install .
 #cd ../
 
-#Download and compile pyhashcat & Hashcat
-git clone https://github.com/f0cker/pyhashcat.git
-cd ./pyhashcat/pyhashcat
-
-#install stable hashcat
-wget https://github.com/hashcat/hashcat/archive/refs/tags/v6.2.1.tar.gz
+#Download and compile hashcat
+wget https://github.com/hashcat/hashcat/archive/refs/tags/v7.1.2.tar.gz
 tar xvfz v*.tar.gz && mv hashcat-* hashcat
-#or install latest hashcat from git
-#git clone https://github.com/hashcat/hashcat.git
 cd hashcat/
 make uninstall
 make clean
 make install
 make install_library
 cd ../
-python3 setup.py build_ext
-python3 setup.py install

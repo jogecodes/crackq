@@ -1,5 +1,5 @@
 import json
-from pyhashcat import Hashcat
+from crackq.hashcat_cli import Hashcat
 
 class HModes(object):
     """

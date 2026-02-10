@@ -3,7 +3,7 @@ script to update/create reference dictionary containing all hashcat hash modes
 """
 #!/usr/bin/env python
 import json
-from pyhashcat import Hashcat
+from crackq.hashcat_cli import Hashcat
 
 bench_dict = {}
 finished = False

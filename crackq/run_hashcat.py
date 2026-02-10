@@ -15,7 +15,7 @@ from crackq.validator import FileValidation as valid
 from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from time import sleep
-from pyhashcat import Hashcat
+from crackq.hashcat_cli import Hashcat
 from redis import Redis
 from rq import Queue
 from rq.serializers import JSONSerializer
@@ -144,6 +144,9 @@ def runner(hash_file=None, hash_mode=1000,
             hc.increment_max = increment_max
     hc.hash = hash_file
     hc.attack_mode = attack_mode
+    # In straight mode, a mask is invalid and will be treated as a file path.
+    if attack_mode == 0:
+        mask = None
     if rules:
         hc.rules = rules
         hc.rp_files_cnt = len(rules)
@@ -234,10 +237,12 @@ def runner(hash_file=None, hash_mode=1000,
     markov_file = str(valid.val_filepath(path_string=file_dir,
                                          file_string='crackq.hcstat'))
     hc.markov_hcstat2 = markov_file
-    hc.custom_charset_1 = '?l?d'
-    hc.custom_charset_2 = '?l?d?u'
-    hc.custom_charset_3 = '?l?d?s'
-    hc.custom_charset_4 = '?u?d?s'
+    # Custom charsets only apply to mask/hybrid attacks.
+    if mask or attack_mode in [3, 6, 7]:
+        hc.custom_charset_1 = '?l?d'
+        hc.custom_charset_2 = '?l?d?u'
+        hc.custom_charset_3 = '?l?d?s'
+        hc.custom_charset_4 = '?u?d?s'
     hc.outfile = outfile
     logger.debug('HC. Hashcat Rules: {}'.format(hc.rules))
     logger.debug('HC. Hashcat rp_files_cnt: {}'.format(hc.rp_files_cnt))
@@ -681,9 +686,18 @@ def hc_worker(crack=None, hash_file=None, session=None,
     -------
     """
 
-    if attack_mode:
-        if not isinstance(attack_mode, int):
+    # Normalize attack_mode for speed checks (can arrive as a string)
+    if attack_mode is not None:
+        if isinstance(attack_mode, str):
+            try:
+                attack_mode = int(attack_mode)
+            except ValueError:
+                attack_mode = None
+        elif not isinstance(attack_mode, int):
             attack_mode = None
+    # In straight mode, a mask is invalid and will be treated as a file path.
+    if attack_mode == 0:
+        mask = None
     # first run with potfile wordlist if option is enabled
     if potcheck:
         try:
@@ -924,6 +938,9 @@ def show_speed(hash_file=None, session=None,
     job_dict = {}
     job_dict['hash_mode'] = hash_mode
     job_dict['attack_mode'] = attack_mode
+    # Avoid passing masks for non-mask attack modes during speed/show checks
+    if attack_mode not in [3, 6, 7]:
+        mask = None
     job_dict['mask'] = mask
     if wordlist:
         job_dict['wordlist'] = [wl for wl, path in CRACK_CONF['wordlists'].items() if path == wordlist][0]

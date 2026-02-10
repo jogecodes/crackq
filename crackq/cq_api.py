@@ -1327,7 +1327,16 @@ class Adder(MethodView):
             speed_args['name'] = q_args['kwargs']['name']
             speed_args['brain'] = q_args['kwargs']['brain']
             speed_args['attack_mode'] = q_args['kwargs']['attack_mode']
-            speed_args['mask'] = '?a?a?a?a?a?a'#\ if q_args['kwargs']['mask'] else None
+            # Only pass masks for mask/hybrid attack modes during speed checks.
+            speed_attack = q_args['kwargs'].get('attack_mode')
+            try:
+                speed_attack = int(speed_attack)
+            except (TypeError, ValueError):
+                speed_attack = None
+            if speed_attack in [3, 6, 7]:
+                speed_args['mask'] = q_args['kwargs'].get('mask')
+            else:
+                speed_args['mask'] = None
             speed_args['pot_path'] = q_args['kwargs']['pot_path']
             speedq_args['kwargs'] = speed_args
             speedq_args['job_id'] = speed_session
