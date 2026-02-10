@@ -36,12 +36,16 @@ class Hashcat:
         self._stdout_thread = None
         self._stderr_thread = None
         self._watch_thread = None
+        self._poll_thread = None
         self._last_status = None
         self._last_log = ""
         self._pty_master = None
         self._status_lock = threading.Lock()
         self._event_handlers = {}
         self._usage_output = None
+        self._last_status_ts = 0.0
+        self._poll_interval = 5.0
+        self._use_external_poll = True
 
         # options
         self.session = None
@@ -277,6 +281,7 @@ class Hashcat:
         val = match.group(2).strip()
         with self._status_lock:
             status = dict(self._last_status or {})
+            self._last_status_ts = time.time()
         # Map key fields used by CrackQ
         if key == "Status":
             status["status_name"] = val
@@ -323,6 +328,50 @@ class Hashcat:
         elif unit.startswith("TH/"):
             mult = 1e12
         return num * mult
+
+    def _poll_status(self):
+        while True:
+            if not self._proc or self._proc.poll() is not None:
+                return
+            now = time.time()
+            with self._status_lock:
+                last = self._last_status_ts
+            if now - last >= self._poll_interval:
+                self._send_control("s")
+                if self._use_external_poll:
+                    self._external_status_poll()
+            time.sleep(self._poll_interval)
+
+    def _external_status_poll(self):
+        # Fallback: query hashcat for session status and parse output.
+        if not self.session:
+            return
+        cmd = [
+            self._bin,
+            "--session",
+            str(self.session),
+            "--status",
+            "--status-timer",
+            "1",
+            "--runtime",
+            "1",
+        ]
+        try:
+            proc = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+        except Exception:
+            return
+        out = proc.stdout or ""
+        err = proc.stderr or ""
+        for line in out.splitlines():
+            self._parse_text_status(line)
+        for line in err.splitlines():
+            self._parse_text_status(line)
 
     def _watcher(self):
         rc = self._proc.wait()
@@ -372,13 +421,21 @@ class Hashcat:
         self._watch_thread = threading.Thread(target=self._watcher, daemon=True)
         self._stdout_thread.start()
         self._watch_thread.start()
+        self._poll_thread = threading.Thread(target=self._poll_status, daemon=True)
+        self._poll_thread.start()
         return 0
 
     def _send_control(self, ch):
         if not self._proc or self._proc.poll() is not None:
             return
         try:
-            self._proc.stdin.write(ch)
+            # When attached to a PTY, hashcat expects single-key input.
+            # Some PTY setups buffer until newline, so send both.
+            if self._pty_master is not None:
+                self._proc.stdin.write(ch)
+                self._proc.stdin.write("\n")
+            else:
+                self._proc.stdin.write(ch)
             self._proc.stdin.flush()
         except Exception:
             pass
